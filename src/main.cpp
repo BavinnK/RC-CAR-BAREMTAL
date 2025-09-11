@@ -1,5 +1,6 @@
 #include <avr/wdt.h>
 #include <Arduino.h>
+#include <avr/sleep.h>
 enum L298N_pins{
   For_dir_btn= PC0,
   Rev_dir_btn= PC1,
@@ -29,7 +30,26 @@ void watchdog_init(){
   WDTCSR=(1<<WDE)|(1<<WDP3)|(1<<WDP0);//i configured it to 8 second the prescaler
   sei();
 }
+void set_PCINT(void){
+  PCICR|=(1<<PCIE1); //this register sets the pinchange interrupt for the portC pins
+  //now we have to mask it which pin we want to have intterrupt to accur
+  PCMSK1|=(1<<PCINT8)|(1<<PCINT9)|(1<<PCINT10)|(1<<PCINT11);//the pins from PC0 TILL PC3
+}
+volatile uint64_t counter=0;
+ISR(PCINT1_vect){
+  counter=0;
+  //we have no code here why? bc when we put the mcu to deep sleep only some parameters can wake the mcu up we only reset the counter in the ISR thats it
+  //1-watchdog INT
+  //2-external INTS 0 and 1
+  //3-PINchange INTS we chose the pcints to wake the mcu up so we dont put anycode in the routine
+}
+void deep_sleep(void) {
+    set_sleep_mode(SLEEP_MODE_PWR_DOWN);
+    sleep_enable();
+    sleep_cpu();
+}
 void setup() {
+  set_PCINT();
   watchdog_init();
   DDRC&=~((1<<For_dir_btn)|(1<<Rev_dir_btn)|(1<<Lef_dir_btn)|(1<<Rig_dir_btn));
   PORTC|=(1<<For_dir_btn)|(1<<Rev_dir_btn)|(1<<Lef_dir_btn)|(1<<Rig_dir_btn);
@@ -71,6 +91,10 @@ void loop() {
   }
   else {
     PORTD&=~((1<<IN2)|(1<<IN1)|(1<<IN3)|(1<<IN4));
+    counter++;
     wdt_reset();
+  }
+  if(counter>=50){
+    deep_sleep();
   }
 }
