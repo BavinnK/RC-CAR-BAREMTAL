@@ -35,30 +35,44 @@ void set_PCINT(void){
   //now we have to mask it which pin we want to have intterrupt to accur
   PCMSK1|=(1<<PCINT8)|(1<<PCINT9)|(1<<PCINT10)|(1<<PCINT11);//the pins from PC0 TILL PC3
 }
-volatile uint64_t counter=0;
+volatile long int milisecond=0;
 ISR(PCINT1_vect){
-  counter=0;
+  milisecond=0;
   //we have no code here why? bc when we put the mcu to deep sleep only some parameters can wake the mcu up we only reset the counter in the ISR thats it
   //1-watchdog INT
   //2-external INTS 0 and 1
   //3-PINchange INTS we chose the pcints to wake the mcu up so we dont put anycode in the routine
+}
+ISR(TIMER2_OVF_vect){
+  milisecond++;
 }
 void deep_sleep(void) {
     set_sleep_mode(SLEEP_MODE_PWR_DOWN);
     sleep_enable();
     sleep_cpu();
 }
-void setup() {
+//in this function we set timer 2 INT so each 1024 us it will send an intterrupt or we can say each 1ms overflow happens and sends an intterrupt
+
+
+void set_timer2(void){
+  TCCR2A=0;
+  TCCR2B=(1<<CS22);//with prescaler of 64 then divide the clkspeed by 64 we get 250kHz and 1 divide by that is 4us 
+  TIMSK2=(1<<TOIE2);
+}
+void setup(){
   set_PCINT();
   watchdog_init();
+  set_timer2();
   DDRC&=~((1<<For_dir_btn)|(1<<Rev_dir_btn)|(1<<Lef_dir_btn)|(1<<Rig_dir_btn));
   PORTC|=(1<<For_dir_btn)|(1<<Rev_dir_btn)|(1<<Lef_dir_btn)|(1<<Rig_dir_btn);
   DDRB|=((1<<Enb_A)|(1<<Enb_B));
- // PORTB|=(1<<Enb_A)|(1<<Enb_B); just set them HIGH means full speed low means zero 127 means hald speed cuz it from 0 to 255
+  // PORTB|=(1<<Enb_A)|(1<<Enb_B); just set them HIGH means full speed low means zero 127 means hald speed cuz it from 0 to 255
+  //
   DDRD|=(1<<IN1)|(1<<IN2)|(1<<IN3)|(1<<IN4);
   set_PWM();
   ENA_speed(127);
   ENB_speed(127);
+  sei();
 
 }
 
@@ -91,10 +105,11 @@ void loop() {
   }
   else {
     PORTD&=~((1<<IN2)|(1<<IN1)|(1<<IN3)|(1<<IN4));
-    counter++;
+    
     wdt_reset();
   }
-  if(counter>=50){
+  if(milisecond>=50000){
     deep_sleep();
   }
 }
+
